@@ -6,9 +6,6 @@ version: 1.0.0+1
 environment:
   sdk: '>=3.3.0 <4.0.0'
 
-# 단계별 개발. 현재 모듈1(화분) + 모듈2(물주기/알림) 까지 필요한 패키지.
-# 이후: 모듈4 사진(image_picker,image) / 모듈5 캘린더(table_calendar) /
-#       모듈6 백업(archive,file_picker,share_plus)
 dependencies:
   flutter:
     sdk: flutter
@@ -26,6 +23,18 @@ dependencies:
   flutter_local_notifications: ^17.2.3
   timezone: ^0.9.4
   flutter_timezone: ^1.0.8
+
+  # 사진 (모듈4)
+  image_picker: ^1.1.2
+  image: ^4.2.0
+
+  # 캘린더 (모듈5)
+  table_calendar: ^3.1.2
+
+  # 백업 (모듈6)
+  archive: ^3.6.1
+  file_picker: ^8.1.2
+  share_plus: ^10.0.2
 
   intl: ^0.19.0
 
