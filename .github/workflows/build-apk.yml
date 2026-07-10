@@ -34,7 +34,46 @@ jobs:
           cp -r /tmp/lib_backup lib
           cp /tmp/pubspec.yaml pubspec.yaml
           rm -rf test
+          sed -i 's/id "com.android.application" version "[^"]*"/id "com.android.application" version "7.4.2"/' android/settings.gradle
           sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.24"/' android/settings.gradle
+
+      - name: Patch android for notifications
+        run: |
+          python3 - <<'PY'
+          manifest = "android/app/src/main/AndroidManifest.xml"
+          m = open(manifest, encoding="utf-8").read()
+          perms = (
+              '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n'
+              '    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>\n'
+              '    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>\n'
+              '    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>\n'
+              '    <uses-permission android:name="android.permission.VIBRATE"/>\n'
+          )
+          if "POST_NOTIFICATIONS" not in m:
+              m = m.replace("<application", perms + "    <application", 1)
+          receivers = (
+              '        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />\n'
+              '        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">\n'
+              '            <intent-filter>\n'
+              '                <action android:name="android.intent.action.BOOT_COMPLETED"/>\n'
+              '                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>\n'
+              '                <action android:name="android.intent.action.QUICKBOOT_POWERON" />\n'
+              '                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>\n'
+              '            </intent-filter>\n'
+              '        </receiver>\n'
+          )
+          if "ScheduledNotificationReceiver" not in m:
+              m = m.replace("</application>", receivers + "    </application>", 1)
+          open(manifest, "w", encoding="utf-8").write(m)
+
+          bg = "android/app/build.gradle"
+          b = open(bg, encoding="utf-8").read()
+          if "coreLibraryDesugaringEnabled" not in b:
+              b = b.replace("compileOptions {", "compileOptions {\n        coreLibraryDesugaringEnabled true", 1)
+          if "desugar_jdk_libs" not in b:
+              b += '\ndependencies {\n    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.0.4"\n}\n'
+          open(bg, "w", encoding="utf-8").write(b)
+          PY
 
       - name: Pub get
         run: flutter pub get
