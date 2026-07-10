@@ -130,8 +130,7 @@ class _PlantCardTile extends StatelessWidget {
 
     return PlantCard(
       plant: plant,
-      // 대표사진 경로 해석은 모듈4(photo) 연결 시 채워진다. 지금은 플레이스홀더.
-      mainPhotoPath: null,
+      mainPhotoPath: provider.mainPhotoPath(plantId),
       onTap: () async {
         await Navigator.of(context).push(
           MaterialPageRoute(

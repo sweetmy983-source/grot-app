@@ -8,6 +8,7 @@
 
 import 'package:flutter/foundation.dart';
 
+import '../../core/app_paths.dart';
 import 'plant_model.dart';
 import 'plant_repository.dart';
 
@@ -16,11 +17,18 @@ class PlantProvider extends ChangeNotifier {
   PlantProvider({PlantRepository? repo}) : _repo = repo ?? PlantRepository();
 
   List<Plant> _plants = [];
+  Map<int, String> _mainPhotoRel = {};
   bool _loading = false;
 
   List<Plant> get plants => _plants;
   bool get loading => _loading;
   bool get isEmpty => !_loading && _plants.isEmpty;
+
+  // 홈 카드 썸네일용 대표사진 절대경로 (없으면 null)
+  String? mainPhotoPath(int plantId) {
+    final rel = _mainPhotoRel[plantId];
+    return rel == null ? null : AppPaths.abs(rel);
+  }
 
   // 물 준 뒤 UI 를 다른 모듈에 알리기 위한 콜백. 모듈2가 여기 등록해
   // care_logs 기록 + 알림 재예약을 수행한다.
@@ -31,6 +39,7 @@ class PlantProvider extends ChangeNotifier {
     _loading = true;
     notifyListeners();
     _plants = await _repo.getPlants(archived: false);
+    _mainPhotoRel = await _repo.getMainPhotoRelPaths();
     _sort();
     _loading = false;
     notifyListeners();

@@ -1,15 +1,15 @@
 // modules/settings/screens/settings_screen.dart
-// 역할: 하단 탭3 "설정". 백업(모듈6), 보관된 화분 보기, 알림 기본 시각, 앱 정보.
-//       지금 단계에서는 "보관된 화분 보기"와 "앱 정보"만 동작하고
-//       백업/알림 기본 시각은 이후 단계에서 연결된다.
+// 역할: 하단 탭3 "설정". 백업(내보내기/가져오기), 보관된 화분 보기, 알림 기본 안내, 앱 정보.
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/constants.dart';
 import '../../../core/theme.dart';
+import '../../backup/backup_service.dart';
 import '../../plant/plant_model.dart';
 import '../../plant/plant_provider.dart';
+import '../../watering/watering_provider.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -20,6 +20,22 @@ class SettingsScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('설정')),
       body: ListView(
         children: [
+          _sectionTitle('백업'),
+          _tile(
+            context,
+            icon: Icons.upload_file_outlined,
+            title: '백업 내보내기',
+            subtitle: '화분·이력·사진을 zip 하나로 저장/공유',
+            onTap: () => _export(context),
+          ),
+          _tile(
+            context,
+            icon: Icons.download_outlined,
+            title: '백업 가져오기',
+            subtitle: 'zip에서 복원 (기존 데이터 덮어씀)',
+            onTap: () => _import(context),
+          ),
+          const Divider(),
           _sectionTitle('데이터'),
           _tile(
             context,
@@ -29,21 +45,13 @@ class SettingsScreen extends StatelessWidget {
               MaterialPageRoute(builder: (_) => const _ArchivedListScreen()),
             ),
           ),
-          _tile(
-            context,
-            icon: Icons.backup_outlined,
-            title: '백업 (내보내기 / 가져오기)',
-            subtitle: '다음 단계(모듈6)에서 열려요',
-            enabled: false,
-          ),
           const Divider(),
           _sectionTitle('알림'),
           _tile(
             context,
-            icon: Icons.notifications_outlined,
+            icon: Icons.notifications_active_outlined,
             title: '알림 기본 시각',
-            subtitle: '다음 단계(모듈2)에서 열려요',
-            enabled: false,
+            subtitle: '새 화분은 기본 오전 9:00로 설정돼요 (화분별로 변경 가능)',
           ),
           const Divider(),
           _sectionTitle('정보'),
@@ -66,16 +74,94 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  // ---------------- 백업 내보내기 ----------------
+  Future<void> _export(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    _showLoading(context, '백업 파일을 만드는 중...');
+    final service = BackupService();
+    try {
+      final zip = await service.exportToZip();
+      if (context.mounted) Navigator.of(context).pop(); // 로딩 닫기
+      await service.shareZip(zip);
+    } catch (e) {
+      if (context.mounted) Navigator.of(context).pop();
+      messenger.showSnackBar(SnackBar(content: Text('내보내기 실패: $e')));
+    }
+  }
+
+  // ---------------- 백업 가져오기 ----------------
+  Future<void> _import(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final plantProvider = context.read<PlantProvider>();
+    final watering = context.read<WateringProvider>();
+    final service = BackupService();
+
+    final path = await service.pickBackupZip();
+    if (path == null) return; // 취소
+
+    final valid = await service.validate(path);
+    if (!valid.ok) {
+      messenger.showSnackBar(SnackBar(content: Text(valid.message)));
+      return;
+    }
+
+    if (!context.mounted) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('기존 데이터를 덮어씁니다'),
+        content: const Text(
+            '지금 앱에 있는 모든 화분·이력·사진이 삭제되고,\n선택한 백업으로 교체됩니다. 계속할까요?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('취소')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
+            child: const Text('덮어쓰기'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    if (!context.mounted) return;
+    _showLoading(context, '복원하는 중...');
+    final result = await service.importFromZip(path);
+    if (context.mounted) Navigator.of(context).pop(); // 로딩 닫기
+
+    if (result.ok) {
+      // DB 복원 후: 목록 갱신 + 알림 전체 재예약
+      await plantProvider.load();
+      await watering.rescheduleAll();
+    }
+    messenger.showSnackBar(SnackBar(content: Text(result.message)));
+  }
+
+  void _showLoading(BuildContext context, String text) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AlertDialog(
+        content: Row(
+          children: [
+            const CircularProgressIndicator(color: AppColors.primary),
+            const SizedBox(width: 16),
+            Expanded(child: Text(text)),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _sectionTitle(String t) => Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-        child: Text(
-          t,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary,
-          ),
-        ),
+        child: Text(t,
+            style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary)),
       );
 
   Widget _tile(
@@ -84,11 +170,9 @@ class SettingsScreen extends StatelessWidget {
     required String title,
     String? subtitle,
     VoidCallback? onTap,
-    bool enabled = true,
   }) {
     return ListTile(
-      enabled: enabled,
-      leading: Icon(icon, color: enabled ? AppColors.primary : Colors.grey),
+      leading: Icon(icon, color: AppColors.primary),
       title: Text(title),
       subtitle: subtitle == null ? null : Text(subtitle),
       trailing: onTap == null ? null : const Icon(Icons.chevron_right),
@@ -97,7 +181,7 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
-// 보관된 화분 목록 — 복원/완전삭제 가능
+// 보관된 화분 목록 — 복원 가능
 class _ArchivedListScreen extends StatefulWidget {
   const _ArchivedListScreen();
 
@@ -133,11 +217,8 @@ class _ArchivedListScreenState extends State<_ArchivedListScreen> {
               child: CircularProgressIndicator(color: AppColors.primary))
           : _items.isEmpty
               ? const Center(
-                  child: Text(
-                    '보관된 화분이 없어요',
-                    style: TextStyle(color: AppColors.textSecondary),
-                  ),
-                )
+                  child: Text('보관된 화분이 없어요',
+                      style: TextStyle(color: AppColors.textSecondary)))
               : ListView.separated(
                   itemCount: _items.length,
                   separatorBuilder: (_, __) => const Divider(height: 0.5),
@@ -149,9 +230,11 @@ class _ArchivedListScreenState extends State<_ArchivedListScreen> {
                       subtitle: Text(p.species ?? ''),
                       trailing: TextButton(
                         onPressed: () async {
+                          final watering = context.read<WateringProvider>();
                           await context
                               .read<PlantProvider>()
                               .archive(p.id!, archived: false);
+                          await watering.onPlantSaved(p); // 복원 시 알림 재예약
                           await _load();
                         },
                         child: const Text('복원'),

@@ -1,27 +1,52 @@
 // modules/plant/screens/plant_detail_screen.dart
-// 역할: 화분 상세 화면. 대표사진 자리 + 기본 정보 + "물 줬어요" 버튼,
-//       그리고 이력/사진 탭(모듈3·4 연결 전까지는 준비중 안내).
-//       우상단 메뉴: 수정 / 보관하기 / 삭제.
+// 역할: 화분 상세. 대표사진 + 기본 정보 + "물 줬어요", 그리고 이력/사진 탭.
+//       이력/사진은 각각 CareLogProvider / PhotoProvider 를 이 화면에서 provide 한다.
+//       우상단 메뉴: 수정 / 보관하기 / 삭제 (알림 취소 연동).
+
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../../core/app_paths.dart';
 import '../../../core/theme.dart';
+import '../../history/care_log_provider.dart';
+import '../../history/screens/care_history_tab.dart';
+import '../../photo/photo_provider.dart';
+import '../../photo/screens/photo_gallery_tab.dart';
 import '../../watering/watering_provider.dart';
 import '../plant_model.dart';
 import '../plant_provider.dart';
 import 'plant_edit_screen.dart';
 
-class PlantDetailScreen extends StatefulWidget {
+class PlantDetailScreen extends StatelessWidget {
   final int plantId;
   const PlantDetailScreen({super.key, required this.plantId});
 
   @override
-  State<PlantDetailScreen> createState() => _PlantDetailScreenState();
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+            create: (_) => CareLogProvider()..loadFor(plantId)),
+        ChangeNotifierProvider(
+            create: (_) => PhotoProvider()..loadFor(plantId)),
+      ],
+      child: _PlantDetailView(plantId: plantId),
+    );
+  }
 }
 
-class _PlantDetailScreenState extends State<PlantDetailScreen>
+class _PlantDetailView extends StatefulWidget {
+  final int plantId;
+  const _PlantDetailView({required this.plantId});
+
+  @override
+  State<_PlantDetailView> createState() => _PlantDetailViewState();
+}
+
+class _PlantDetailViewState extends State<_PlantDetailView>
     with SingleTickerProviderStateMixin {
   late final TabController _tab;
   Plant? _plant;
@@ -53,7 +78,8 @@ class _PlantDetailScreenState extends State<PlantDetailScreen>
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        body:
+            Center(child: CircularProgressIndicator(color: AppColors.primary)),
       );
     }
     final plant = _plant;
@@ -91,9 +117,9 @@ class _PlantDetailScreenState extends State<PlantDetailScreen>
           Expanded(
             child: TabBarView(
               controller: _tab,
-              children: const [
-                _ComingSoon(label: '관리 이력은 다음 단계(모듈3)에서 열려요'),
-                _ComingSoon(label: '사진 갤러리는 다음 단계(모듈4)에서 열려요'),
+              children: [
+                CareHistoryTab(plantId: widget.plantId),
+                PhotoGalleryTab(plantId: widget.plantId),
               ],
             ),
           ),
@@ -114,14 +140,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            height: 120,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEAF3DE),
-              borderRadius: BorderRadius.circular(kCardRadius),
-            ),
-            child: const Center(child: Text('🌿', style: TextStyle(fontSize: 52))),
-          ),
+          _mainPhoto(),
           const SizedBox(height: 14),
           _infoRow('품종', plant.species),
           _infoRow('위치', plant.location),
@@ -147,6 +166,31 @@ class _PlantDetailScreenState extends State<PlantDetailScreen>
     );
   }
 
+  // 대표사진: PhotoProvider 에서 main 사진을 찾아 표시 (없으면 이모지)
+  Widget _mainPhoto() {
+    final photoProvider = context.watch<PhotoProvider>();
+    final mainId = photoProvider.mainPhotoId;
+    String? path;
+    for (final ph in photoProvider.photos) {
+      if (ph.id == mainId) {
+        path = AppPaths.abs(ph.filePath);
+        break;
+      }
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(kCardRadius),
+      child: Container(
+        height: 140,
+        width: double.infinity,
+        color: const Color(0xFFEAF3DE),
+        child: (path != null && File(path).existsSync())
+            ? Image.file(File(path), fit: BoxFit.cover)
+            : const Center(child: Text('🌿', style: TextStyle(fontSize: 52))),
+      ),
+    );
+  }
+
   Widget _infoRow(String label, String? value, {Color? valueColor}) {
     if (value == null || value.isEmpty) return const SizedBox.shrink();
     return Padding(
@@ -156,13 +200,9 @@ class _PlantDetailScreenState extends State<PlantDetailScreen>
         children: [
           SizedBox(
             width: 80,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-              ),
-            ),
+            child: Text(label,
+                style: const TextStyle(
+                    fontSize: 13, color: AppColors.textSecondary)),
           ),
           Expanded(
             child: Text(
@@ -181,8 +221,10 @@ class _PlantDetailScreenState extends State<PlantDetailScreen>
 
   Future<void> _water(Plant plant) async {
     final messenger = ScaffoldMessenger.of(context);
+    final careProvider = context.read<CareLogProvider>();
     await context.read<PlantProvider>().water(plant);
     await _reload();
+    await careProvider.loadFor(widget.plantId); // 물주기 기록 즉시 반영
     messenger.showSnackBar(
       SnackBar(
         content: Text('${plant.name}에게 물을 줬어요 💧'),
@@ -228,9 +270,8 @@ class _PlantDetailScreenState extends State<PlantDetailScreen>
         content: const Text('이 화분과 모든 이력·사진이 영구 삭제됩니다.\n삭제할까요?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소'),
-          ),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('취소')),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: AppColors.danger),
@@ -242,23 +283,4 @@ class _PlantDetailScreenState extends State<PlantDetailScreen>
   }
 
   static String _two(int n) => n.toString().padLeft(2, '0');
-}
-
-class _ComingSoon extends StatelessWidget {
-  final String label;
-  const _ComingSoon({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-        ),
-      ),
-    );
-  }
 }

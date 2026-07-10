@@ -4,9 +4,12 @@
 //       완전 오프라인 앱 — 네트워크 초기화는 존재하지 않는다.
 
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import 'app/home_shell.dart';
+import 'core/app_paths.dart';
 import 'core/constants.dart';
 import 'core/theme.dart';
 import 'modules/plant/plant_provider.dart';
@@ -15,6 +18,13 @@ import 'modules/watering/watering_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 한국어 날짜 포맷 데이터 초기화 (캘린더 요일 표기 등)
+  Intl.defaultLocale = 'ko_KR';
+  await initializeDateFormatting('ko_KR', null);
+
+  // 경로/사진 폴더 초기화 (사진 상대경로 변환에 필요)
+  await AppPaths.init();
 
   // 알림 서비스 초기화 (타임존 포함)
   await NotificationService.instance.init();

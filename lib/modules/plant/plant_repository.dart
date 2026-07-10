@@ -27,6 +27,13 @@ class PlantRepository {
     return rows.map(Plant.fromMap).toList();
   }
 
+  // 보관 여부 무관 전체 화분 (캘린더 이름 조회 등)
+  Future<List<Plant>> getAllPlants() async {
+    final db = await _db;
+    final rows = await db.query(Tables.plants, orderBy: 'created_at DESC');
+    return rows.map(Plant.fromMap).toList();
+  }
+
   Future<Plant?> getById(int id) async {
     final db = await _db;
     final rows = await db.query(
@@ -91,5 +98,22 @@ class PlantRepository {
   Future<void> delete(int id) async {
     final db = await _db;
     await db.delete(Tables.plants, where: 'id = ?', whereArgs: [id]);
+  }
+
+  // 각 화분의 대표사진 상대경로 맵 (홈 카드 썸네일용). main_photo_id 가 가리키는 사진.
+  Future<Map<int, String>> getMainPhotoRelPaths() async {
+    final db = await _db;
+    final rows = await db.rawQuery('''
+      SELECT p.id AS pid, ph.file_path AS fp
+      FROM ${Tables.plants} p
+      JOIN ${Tables.photos} ph ON p.main_photo_id = ph.id
+    ''');
+    final map = <int, String>{};
+    for (final r in rows) {
+      final pid = r['pid'] as int?;
+      final fp = r['fp'] as String?;
+      if (pid != null && fp != null) map[pid] = fp;
+    }
+    return map;
   }
 }
