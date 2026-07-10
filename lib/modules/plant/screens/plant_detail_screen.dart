@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme.dart';
+import '../../watering/watering_provider.dart';
 import '../plant_model.dart';
 import '../plant_provider.dart';
 import 'plant_edit_screen.dart';
@@ -193,6 +194,7 @@ class _PlantDetailScreenState extends State<PlantDetailScreen>
 
   Future<void> _onMenu(String v, Plant plant) async {
     final provider = context.read<PlantProvider>();
+    final watering = context.read<WateringProvider>();
     final navigator = Navigator.of(context);
 
     switch (v) {
@@ -204,12 +206,14 @@ class _PlantDetailScreenState extends State<PlantDetailScreen>
         break;
       case 'archive':
         await provider.archive(plant.id!);
+        await watering.onPlantRemoved(plant.id!);
         navigator.pop();
         break;
       case 'delete':
         final ok = await _confirmDelete();
         if (ok == true) {
           await provider.delete(plant.id!);
+          await watering.onPlantRemoved(plant.id!);
           navigator.pop();
         }
         break;

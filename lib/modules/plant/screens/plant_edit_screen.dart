@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme.dart';
+import '../../watering/watering_provider.dart';
 import '../plant_model.dart';
 import '../plant_provider.dart';
 
@@ -163,6 +164,7 @@ class _PlantEditScreenState extends State<PlantEditScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     final provider = context.read<PlantProvider>();
+    final watering = context.read<WateringProvider>();
     final navigator = Navigator.of(context);
 
     final base = widget.existing;
@@ -183,10 +185,11 @@ class _PlantEditScreenState extends State<PlantEditScreen> {
 
     if (_isEdit) {
       await provider.update(plant);
+      await watering.onPlantSaved(plant);
     } else {
-      await provider.add(plant);
+      final id = await provider.add(plant);
+      await watering.onPlantSaved(plant.copyWith(id: id));
     }
-    // TODO(모듈2): 저장 후 알림 예약/재예약 연결
     navigator.pop();
   }
 }
