@@ -1,0 +1,156 @@
+// modules/plant/screens/home_screen.dart
+// 역할: 하단 탭1 "내 화분" 홈 화면. 화분 카드 목록 + 화분 추가 FAB.
+//       연체 화분은 카드 상단(빨간 배지)으로 강조되고 목록 최상단에 정렬된다.
+//       빈 상태(empty state) 안내 포함.
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../../core/theme.dart';
+import '../plant_provider.dart';
+import '../widgets/plant_card.dart';
+import 'plant_detail_screen.dart';
+import 'plant_edit_screen.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // 첫 프레임 이후 로드 (context 사용 안전)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<PlantProvider>().load();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<PlantProvider>();
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('내 화분')),
+      body: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: () => context.read<PlantProvider>().load(),
+        child: _buildBody(provider),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openAdd,
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  Widget _buildBody(PlantProvider provider) {
+    if (provider.loading && provider.plants.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(color: AppColors.primary),
+      );
+    }
+    if (provider.isEmpty) {
+      return _emptyState();
+    }
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 96),
+      itemCount: provider.plants.length,
+      itemBuilder: (context, i) {
+        final plant = provider.plants[i];
+        return _PlantCardTile(plantId: plant.id!);
+      },
+    );
+  }
+
+  Widget _emptyState() {
+    // 스크롤 가능해야 당겨서 새로고침이 동작
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        const SizedBox(height: 120),
+        const Center(child: Text('🪴', style: TextStyle(fontSize: 64))),
+        const SizedBox(height: 16),
+        const Center(
+          child: Text(
+            '아직 등록된 화분이 없어요',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Center(
+          child: Text(
+            '오른쪽 아래 + 버튼으로 첫 화분을 추가해 보세요',
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Center(
+          child: FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            ),
+            onPressed: _openAdd,
+            icon: const Icon(Icons.add),
+            label: const Text('화분 추가'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openAdd() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const PlantEditScreen()),
+    );
+    if (mounted) context.read<PlantProvider>().load();
+  }
+}
+
+// 개별 카드 타일 — provider 목록에서 최신 plant 를 찾아 렌더.
+class _PlantCardTile extends StatelessWidget {
+  final int plantId;
+  const _PlantCardTile({required this.plantId});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<PlantProvider>();
+    final idx = provider.plants.indexWhere((p) => p.id == plantId);
+    if (idx < 0) return const SizedBox.shrink();
+    final plant = provider.plants[idx];
+
+    return PlantCard(
+      plant: plant,
+      // 대표사진 경로 해석은 모듈4(photo) 연결 시 채워진다. 지금은 플레이스홀더.
+      mainPhotoPath: null,
+      onTap: () async {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => PlantDetailScreen(plantId: plant.id!),
+          ),
+        );
+        if (context.mounted) context.read<PlantProvider>().load();
+      },
+      onWater: () async {
+        final messenger = ScaffoldMessenger.of(context);
+        await context.read<PlantProvider>().water(plant);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('${plant.name}에게 물을 줬어요 💧'),
+            backgroundColor: AppColors.primaryDark,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      },
+    );
+  }
+}
