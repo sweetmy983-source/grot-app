@@ -115,12 +115,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     if (!mounted) return;
     context.read<PlantProvider>().load();
-    if (result == 'added') {
-      messenger.showSnackBar(const SnackBar(
-        content: Text('새 화분을 등록했어요 🌱'),
-        backgroundColor: AppColors.primaryDark,
-        duration: Duration(seconds: 2),
-      ));
+    if (result == 'added' || result == 'updated') {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          content: Text(result == 'added' ? '새 화분을 등록했어요 🌱' : '화분 정보를 수정했어요'),
+          backgroundColor: AppColors.primaryDark,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          duration: const Duration(seconds: 2),
+        ));
     }
   }
 }
@@ -152,29 +156,39 @@ class _PlantCardTile extends StatelessWidget {
         context.read<PlantProvider>().load();
         // 상세에서 삭제/보관하고 돌아온 경우 안내
         if (result == 'deleted') {
-          messenger.showSnackBar(SnackBar(
-            content: Text("'$name' 화분을 삭제했어요"),
-            backgroundColor: AppColors.danger,
-            duration: const Duration(seconds: 2),
-          ));
+          messenger
+            ..hideCurrentSnackBar()
+            ..showSnackBar(SnackBar(
+              content: Text("'$name' 화분을 삭제했어요"),
+              backgroundColor: AppColors.danger,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              duration: const Duration(seconds: 2),
+            ));
         } else if (result == 'archived') {
-          messenger.showSnackBar(SnackBar(
-            content: Text("'$name' 화분을 보관함으로 옮겼어요"),
-            backgroundColor: AppColors.primaryDark,
-            duration: const Duration(seconds: 2),
-          ));
+          messenger
+            ..hideCurrentSnackBar()
+            ..showSnackBar(SnackBar(
+              content: Text("'$name' 화분을 보관함으로 옮겼어요"),
+              backgroundColor: AppColors.primaryDark,
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              duration: const Duration(seconds: 2),
+            ));
         }
       },
       onWater: () async {
         final messenger = ScaffoldMessenger.of(context);
         await context.read<PlantProvider>().water(plant);
-        messenger.showSnackBar(
-          SnackBar(
+        messenger
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(
             content: Text('${plant.name}에게 물을 줬어요 💧'),
             backgroundColor: AppColors.primaryDark,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             duration: const Duration(seconds: 2),
-          ),
-        );
+          ));
       },
     );
   }
