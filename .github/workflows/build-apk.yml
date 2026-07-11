@@ -27,21 +27,24 @@ jobs:
       - name: Scaffold android project
         run: |
           cp pubspec.yaml /tmp/pubspec.yaml
+          [ -f pubspec.lock ] && cp pubspec.lock /tmp/pubspec.lock || true
           cp -r lib /tmp/lib_backup
           rm -rf android
           flutter create --platforms=android --project-name groo --org com.groo .
           rm -rf lib
           cp -r /tmp/lib_backup lib
           cp /tmp/pubspec.yaml pubspec.yaml
+          [ -f /tmp/pubspec.lock ] && cp /tmp/pubspec.lock pubspec.lock || true
           rm -rf test
 
-      - name: Patch android for notifications
+      - name: Patch android
         run: |
           python3 - <<'PY'
           import os
 
           manifest = "android/app/src/main/AndroidManifest.xml"
           m = open(manifest, encoding="utf-8").read()
+          m = m.replace('android:label="groo"', 'android:label="그루우"')
           perms = (
               '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n'
               '    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>\n'
@@ -65,7 +68,6 @@ jobs:
           if "ScheduledNotificationReceiver" not in m:
               m = m.replace("</application>", receivers + "    </application>", 1)
           open(manifest, "w", encoding="utf-8").write(m)
-          print("manifest patched")
 
           kts = "android/app/build.gradle.kts"
           groovy = "android/app/build.gradle"
@@ -77,7 +79,6 @@ jobs:
               if "desugar_jdk_libs" not in b:
                   b += '\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
               open(kts, "w", encoding="utf-8").write(b)
-              print("build.gradle.kts patched")
           elif os.path.exists(groovy):
               b = open(groovy, encoding="utf-8").read()
               if "coreLibraryDesugaringEnabled" not in b:
@@ -86,11 +87,13 @@ jobs:
               if "desugar_jdk_libs" not in b:
                   b += '\ndependencies {\n    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.4"\n}\n'
               open(groovy, "w", encoding="utf-8").write(b)
-              print("build.gradle patched")
           PY
 
       - name: Pub get
         run: flutter pub get
+
+      - name: Generate launcher icon
+        run: dart run flutter_launcher_icons
 
       - name: Analyze
         run: flutter analyze || true
@@ -104,3 +107,10 @@ jobs:
           name: groo-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
+      - name: Upload pubspec.lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: pubspec-lock
+          path: pubspec.lock
+          if-no-files-found: warn
