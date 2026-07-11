@@ -183,13 +183,19 @@ class _PlantEditScreenState extends State<PlantEditScreen> {
       isArchived: base?.isArchived ?? false,
     );
 
+    // 알림 예약 실패가 저장 완료 흐름(pop + 결과 전달 → 완료 안내)을
+    // 막지 않도록 한다. (NotificationService 에도 폴백이 있지만 이중 안전망)
     if (_isEdit) {
       await provider.update(plant);
-      await watering.onPlantSaved(plant);
+      try {
+        await watering.onPlantSaved(plant);
+      } catch (_) {}
       navigator.pop('updated');
     } else {
       final id = await provider.add(plant);
-      await watering.onPlantSaved(plant.copyWith(id: id));
+      try {
+        await watering.onPlantSaved(plant.copyWith(id: id));
+      } catch (_) {}
       navigator.pop('added');
     }
   }

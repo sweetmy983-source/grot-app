@@ -145,15 +145,18 @@ class _PlantCardTile extends StatelessWidget {
       plant: plant,
       mainPhotoPath: provider.mainPhotoPath(plantId),
       onTap: () async {
+        // 삭제 시 provider.load() 가 상세 화면이 닫히기 전에 실행되어
+        // 이 카드 위젯이 트리에서 먼저 제거될 수 있다(마지막/유일한 화분일 때).
+        // 따라서 await 이후에는 context 를 쓰지 않도록 전부 미리 캡처한다.
         final messenger = ScaffoldMessenger.of(context);
+        final provider = context.read<PlantProvider>();
         final name = plant.name;
         final result = await Navigator.of(context).push<String>(
           MaterialPageRoute(
             builder: (_) => PlantDetailScreen(plantId: plant.id!),
           ),
         );
-        if (!context.mounted) return;
-        context.read<PlantProvider>().load();
+        provider.load();
         // 상세에서 삭제/보관하고 돌아온 경우 안내
         if (result == 'deleted') {
           messenger

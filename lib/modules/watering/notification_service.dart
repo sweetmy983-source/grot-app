@@ -83,6 +83,8 @@ class NotificationService {
       );
 
   // 화분의 다음 물주기 예정일에 알림 예약. 이미 지난 화분은 다음 알림 시각으로 잡는다.
+  // 알림은 best-effort: 예약 실패(정확한 알람 권한 미허용 등)가
+  // 화분 저장/삭제 흐름(화면 닫기·완료 안내)을 막지 않도록 예외를 여기서 처리한다.
   Future<void> scheduleForPlant(Plant plant) async {
     final id = plant.id;
     if (id == null || plant.isArchived) return;
@@ -90,18 +92,35 @@ class NotificationService {
     await cancel(id);
 
     final scheduled = _computeSchedule(plant);
-    await _plugin.zonedSchedule(
-      id,
+    try {
+      await _zonedSchedule(
+          plant, scheduled, AndroidScheduleMode.exactAllowWhileIdle);
+    } catch (_) {
+      // Android 14+ 에서 '알람 및 리마인더' 권한이 꺼져 있으면 exact 예약이
+      // PlatformException 을 던진다 → 대략적인 시각(inexact)으로 폴백.
+      try {
+        await _zonedSchedule(
+            plant, scheduled, AndroidScheduleMode.inexactAllowWhileIdle);
+      } catch (e) {
+        debugPrint('알림 예약 실패 (plant $id): $e');
+      }
+    }
+  }
+
+  Future<void> _zonedSchedule(
+      Plant plant, tz.TZDateTime scheduled, AndroidScheduleMode mode) {
+    return _plugin.zonedSchedule(
+      plant.id!,
       '${plant.name} 물 줄 시간이에요 💧',
       (plant.species ?? '').isEmpty
           ? '물주기 예정일이에요'
           : '${plant.species} · 물주기 예정일이에요',
       scheduled,
       _details,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      androidScheduleMode: mode,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
-      payload: id.toString(),
+      payload: plant.id.toString(),
     );
   }
 

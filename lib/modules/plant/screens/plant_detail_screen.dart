@@ -267,24 +267,39 @@ class _PlantDetailViewState extends State<_PlantDetailView>
     final provider = context.read<PlantProvider>();
     final watering = context.read<WateringProvider>();
     final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
 
     switch (v) {
       case 'edit':
-        await navigator.push(
+        final result = await navigator.push<String>(
           MaterialPageRoute(builder: (_) => PlantEditScreen(existing: plant)),
         );
         await _reload();
+        if (result == 'updated') {
+          messenger
+            ..hideCurrentSnackBar()
+            ..showSnackBar(const SnackBar(
+              content: Text('화분 정보를 수정했어요'),
+              backgroundColor: AppColors.primaryDark,
+              duration: Duration(seconds: 2),
+            ));
+        }
         break;
       case 'archive':
         await provider.archive(plant.id!);
-        await watering.onPlantRemoved(plant.id!);
+        // 알림 취소 실패가 화면 복귀(pop + 결과 전달)를 막지 않도록 한다.
+        try {
+          await watering.onPlantRemoved(plant.id!);
+        } catch (_) {}
         navigator.pop('archived');
         break;
       case 'delete':
         final ok = await _confirmDelete();
         if (ok == true) {
           await provider.delete(plant.id!);
-          await watering.onPlantRemoved(plant.id!);
+          try {
+            await watering.onPlantRemoved(plant.id!);
+          } catch (_) {}
           navigator.pop('deleted');
         }
         break;
