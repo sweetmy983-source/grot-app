@@ -52,6 +52,10 @@ class _PlantDetailViewState extends State<_PlantDetailView>
   Plant? _plant;
   bool _loading = true;
 
+  CareLogProvider? _care;
+  WateringProvider? _watering;
+  int _careRev = 0;
+
   @override
   void initState() {
     super.initState();
@@ -60,7 +64,32 @@ class _PlantDetailViewState extends State<_PlantDetailView>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _watering = context.read<WateringProvider>();
+    final care = context.read<CareLogProvider>();
+    if (!identical(_care, care)) {
+      _care?.removeListener(_onCareChanged);
+      _care = care;
+      _careRev = care.revision;
+      _care!.addListener(_onCareChanged);
+    }
+  }
+
+  // 이력이 실제로 바뀌면(추가/수정/삭제) 헤더의 마지막/다음 물주기를 갱신하고
+  // 알림을 재예약한다. (필터 변경 등은 revision 이 그대로라 무시)
+  Future<void> _onCareChanged() async {
+    final care = _care;
+    if (care == null || care.revision == _careRev) return;
+    _careRev = care.revision;
+    await _reload();
+    final p = _plant;
+    if (p != null) await _watering?.onPlantSaved(p);
+  }
+
+  @override
   void dispose() {
+    _care?.removeListener(_onCareChanged);
     _tab.dispose();
     super.dispose();
   }
@@ -249,14 +278,14 @@ class _PlantDetailViewState extends State<_PlantDetailView>
       case 'archive':
         await provider.archive(plant.id!);
         await watering.onPlantRemoved(plant.id!);
-        navigator.pop();
+        navigator.pop('archived');
         break;
       case 'delete':
         final ok = await _confirmDelete();
         if (ok == true) {
           await provider.delete(plant.id!);
           await watering.onPlantRemoved(plant.id!);
-          navigator.pop();
+          navigator.pop('deleted');
         }
         break;
     }

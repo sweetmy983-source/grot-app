@@ -17,20 +17,24 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
-
-  static const _screens = [
-    HomeScreen(),
-    CalendarScreen(),
-    SettingsScreen(),
-  ];
+  // 캘린더 탭을 열 때마다 값을 바꿔 화면을 새로 만들어(=최신 데이터 로드) 준다.
+  int _calendarKey = 0;
 
   @override
   Widget build(BuildContext context) {
+    final screens = [
+      const HomeScreen(),
+      CalendarScreen(key: ValueKey(_calendarKey)),
+      const SettingsScreen(),
+    ];
     return Scaffold(
-      body: IndexedStack(index: _index, children: _screens),
+      body: IndexedStack(index: _index, children: screens),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
-        onTap: (i) => setState(() => _index = i),
+        onTap: (i) => setState(() {
+          _index = i;
+          if (i == 1) _calendarKey++; // 캘린더 탭 → 새로고침
+        }),
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.local_florist_outlined),

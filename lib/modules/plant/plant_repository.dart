@@ -94,6 +94,17 @@ class PlantRepository {
     );
   }
 
+  // last_watered_at 을 지정값 또는 null(기록 없음)로 설정 (이력 변경 시 재계산용)
+  Future<void> setLastWatered(int plantId, DateTime? at) async {
+    final db = await _db;
+    await db.update(
+      Tables.plants,
+      {'last_watered_at': at?.toIso8601String()},
+      where: 'id = ?',
+      whereArgs: [plantId],
+    );
+  }
+
   // 완전 삭제 — care_logs/photos 는 ON DELETE CASCADE 로 함께 삭제됨
   Future<void> delete(int id) async {
     final db = await _db;

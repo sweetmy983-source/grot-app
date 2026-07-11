@@ -186,10 +186,11 @@ class _PlantEditScreenState extends State<PlantEditScreen> {
     if (_isEdit) {
       await provider.update(plant);
       await watering.onPlantSaved(plant);
+      navigator.pop('updated');
     } else {
       final id = await provider.add(plant);
       await watering.onPlantSaved(plant.copyWith(id: id));
+      navigator.pop('added');
     }
-    navigator.pop();
   }
 }

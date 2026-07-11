@@ -109,10 +109,19 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openAdd() async {
-    await Navigator.of(context).push(
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await Navigator.of(context).push<String>(
       MaterialPageRoute(builder: (_) => const PlantEditScreen()),
     );
-    if (mounted) context.read<PlantProvider>().load();
+    if (!mounted) return;
+    context.read<PlantProvider>().load();
+    if (result == 'added') {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('새 화분을 등록했어요 🌱'),
+        backgroundColor: AppColors.primaryDark,
+        duration: Duration(seconds: 2),
+      ));
+    }
   }
 }
 
@@ -132,12 +141,29 @@ class _PlantCardTile extends StatelessWidget {
       plant: plant,
       mainPhotoPath: provider.mainPhotoPath(plantId),
       onTap: () async {
-        await Navigator.of(context).push(
+        final messenger = ScaffoldMessenger.of(context);
+        final name = plant.name;
+        final result = await Navigator.of(context).push<String>(
           MaterialPageRoute(
             builder: (_) => PlantDetailScreen(plantId: plant.id!),
           ),
         );
-        if (context.mounted) context.read<PlantProvider>().load();
+        if (!context.mounted) return;
+        context.read<PlantProvider>().load();
+        // 상세에서 삭제/보관하고 돌아온 경우 안내
+        if (result == 'deleted') {
+          messenger.showSnackBar(SnackBar(
+            content: Text("'$name' 화분을 삭제했어요"),
+            backgroundColor: AppColors.danger,
+            duration: const Duration(seconds: 2),
+          ));
+        } else if (result == 'archived') {
+          messenger.showSnackBar(SnackBar(
+            content: Text("'$name' 화분을 보관함으로 옮겼어요"),
+            backgroundColor: AppColors.primaryDark,
+            duration: const Duration(seconds: 2),
+          ));
+        }
       },
       onWater: () async {
         final messenger = ScaffoldMessenger.of(context);
