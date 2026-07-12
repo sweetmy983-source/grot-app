@@ -10,7 +10,9 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/app_paths.dart';
+import '../../../core/constants.dart';
 import '../../../core/theme.dart';
+import '../../history/care_log_model.dart';
 import '../../history/care_log_provider.dart';
 import '../../history/screens/care_history_tab.dart';
 import '../../photo/photo_provider.dart';
@@ -248,12 +250,18 @@ class _PlantDetailViewState extends State<_PlantDetailView>
     );
   }
 
+  // [물주기 즉시반영 v2] "물 줬어요"는 이력 추가와 완전히 같은 경로
+  // (CareLogProvider.add)로 기록한다. 이 경로가 이력 목록 재로딩 +
+  // last_watered_at 동기화 + revision 신호(→ 헤더 갱신·알림 재예약)를
+  // 한 번에 처리하므로, 나갔다 오지 않아도 화면이 즉시 갱신된다.
   Future<void> _water(Plant plant) async {
     final messenger = ScaffoldMessenger.of(context);
     final careProvider = context.read<CareLogProvider>();
-    await context.read<PlantProvider>().water(plant);
-    await _reload();
-    await careProvider.loadFor(widget.plantId); // 물주기 기록 즉시 반영
+    await careProvider.add(CareLog(
+      plantId: widget.plantId,
+      type: CareType.water,
+      loggedAt: DateTime.now(),
+    ));
     messenger.showSnackBar(
       SnackBar(
         content: Text('${plant.name}에게 물을 줬어요 💧'),
