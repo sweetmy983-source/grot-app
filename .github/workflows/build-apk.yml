@@ -1,3 +1,5 @@
+# GitHub Actions — 코드를 올리면 자동으로 안드로이드 APK 를 만들어 준다. (한글 안내는 GUIDE.md)
+
 name: Build APK
 
 on:
@@ -24,6 +26,7 @@ jobs:
           channel: stable
           flutter-version: '3.29.3'
 
+      # 안드로이드 골격(android/)을 새로 만들고 우리 코드(lib, pubspec, pubspec.lock)를 되돌린다.
       - name: Scaffold android project
         run: |
           cp pubspec.yaml /tmp/pubspec.yaml
@@ -37,6 +40,7 @@ jobs:
           [ -f /tmp/pubspec.lock ] && cp /tmp/pubspec.lock pubspec.lock || true
           rm -rf test
 
+      # 알림 권한/리시버 + 코어 디슈가링 주입 + 앱 이름 한글화
       - name: Patch android
         run: |
           python3 - <<'PY'
@@ -44,6 +48,7 @@ jobs:
 
           manifest = "android/app/src/main/AndroidManifest.xml"
           m = open(manifest, encoding="utf-8").read()
+          # 앱 이름(런처 라벨) 한글로
           m = m.replace('android:label="groo"', 'android:label="그루우"')
           perms = (
               '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n'
@@ -68,6 +73,7 @@ jobs:
           if "ScheduledNotificationReceiver" not in m:
               m = m.replace("</application>", receivers + "    </application>", 1)
           open(manifest, "w", encoding="utf-8").write(m)
+          print("manifest patched")
 
           kts = "android/app/build.gradle.kts"
           groovy = "android/app/build.gradle"
@@ -79,6 +85,7 @@ jobs:
               if "desugar_jdk_libs" not in b:
                   b += '\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
               open(kts, "w", encoding="utf-8").write(b)
+              print("build.gradle.kts patched")
           elif os.path.exists(groovy):
               b = open(groovy, encoding="utf-8").read()
               if "coreLibraryDesugaringEnabled" not in b:
@@ -87,11 +94,46 @@ jobs:
               if "desugar_jdk_libs" not in b:
                   b += '\ndependencies {\n    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.4"\n}\n'
               open(groovy, "w", encoding="utf-8").write(b)
+              print("build.gradle patched")
+          PY
+
+      # 고정 서명 키 적용 — 같은 키로 서명해야 폰에서 삭제 없이 덮어 설치(업데이트)가 된다.
+      # 저장소 Secrets 에 KEYSTORE_BASE64 / KEYSTORE_PASSWORD 가 있어야 하며,
+      # 없으면 경고만 내고 임시 키로 빌드한다(설치는 되지만 다음부터 덮어 설치 불가).
+      - name: Setup release signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::warning::KEYSTORE_BASE64 Secret 이 없어 임시 키로 서명합니다 (덮어 설치 불가)"
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > android/app/groo-release.keystore
+          python3 - <<'PY'
+          kts = "android/app/build.gradle.kts"
+          b = open(kts, encoding="utf-8").read()
+          sign = (
+              '    signingConfigs {\n'
+              '        create("release") {\n'
+              '            storeFile = file("groo-release.keystore")\n'
+              '            storePassword = System.getenv("KEYSTORE_PASSWORD")\n'
+              '            keyAlias = "groo"\n'
+              '            keyPassword = System.getenv("KEYSTORE_PASSWORD")\n'
+              '        }\n'
+              '    }\n\n'
+          )
+          if 'create("release")' not in b:
+              b = b.replace("    buildTypes {", sign + "    buildTypes {", 1)
+          b = b.replace('signingConfig = signingConfigs.getByName("debug")',
+                        'signingConfig = signingConfigs.getByName("release")')
+          open(kts, "w", encoding="utf-8").write(b)
+          print("release signing patched")
           PY
 
       - name: Pub get
         run: flutter pub get
 
+      # 앱 아이콘 생성 (assets/icon/app_icon.png 기준으로 mipmap 만듦)
       - name: Generate launcher icon
         run: dart run flutter_launcher_icons
 
@@ -99,6 +141,8 @@ jobs:
         run: flutter analyze || true
 
       - name: Build APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: flutter build apk --release
 
       - name: Upload APK
@@ -108,6 +152,7 @@ jobs:
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
 
+      # 버전 완전 고정용: 이 파일을 저장소 루트에 커밋하면 이후 빌드가 같은 버전으로 고정됨
       - name: Upload pubspec.lock
         uses: actions/upload-artifact@v4
         with:
